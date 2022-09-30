@@ -7,26 +7,55 @@
 //
 
 import Photos
-import UIKit
+import SwiftUI
+
+enum Section {
+    case main
+}
 
 class ViewController: UIViewController {
     var layout: UICollectionViewFlowLayout = {
         let layout = UICollectionViewFlowLayout()
         layout.sectionInset = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
-        layout.itemSize = CGSize(width: 100, height: 100)
+        layout.itemSize = CGSize(width: 40, height: 40)
         return layout
     }()
 
     lazy var collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
     var fetchResult: PHFetchResult<PHAsset>?
 
+    lazy var dataSource = UICollectionViewDiffableDataSource<Section, String>(collectionView: collectionView) { [weak self] collectionView, indexPath, itemIdentifier in
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "Cell", for: indexPath) as! Cell
+        guard let self = self else { return cell }
+
+        if cell.imageRequestID != nil {
+            cell.imageRequestID = nil
+        }
+
+        if let fetchResult = self.fetchResult {
+            let asset = fetchResult.object(at: indexPath.item)
+            let imageRequestID = PHImageManager.default().requestImage(
+                for: asset,
+                targetSize: .init(width: 5, height: 5),
+                contentMode: .default,
+                options: nil
+            ) { image, _ in
+                cell.imageView.image = image
+            }
+            cell.imageRequestID = imageRequestID
+        }
+
+        return cell
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
         view.addSubview(collectionView)
         collectionView.pinEdgesToSuperview()
-        collectionView.dataSource = self
         collectionView.register(Cell.self, forCellWithReuseIdentifier: "Cell")
+
+        _ = dataSource
 
         switch PHPhotoLibrary.authorizationStatus(for: .readWrite) {
         case .limited, .authorized:
@@ -45,35 +74,19 @@ class ViewController: UIViewController {
 
     func fetchAssets() {
         fetchResult = PHAsset.fetchAssets(with: nil)
-        collectionView.reloadData()
-    }
-}
 
-extension ViewController: UICollectionViewDataSource {
-    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return fetchResult?.count ?? 0
-    }
+        var snapshot = NSDiffableDataSourceSnapshot<Section, String>()
+        snapshot.appendSections([.main])
+        let itemIdentifiers = (0 ..< fetchResult!.count).map { _ in UUID().uuidString }
+        snapshot.appendItems(itemIdentifiers, toSection: .main)
 
-    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "Cell", for: indexPath) as! Cell
-
-        if let fetchResult {
-            let asset = fetchResult.object(at: indexPath.item)
-            _ = PHImageManager.default().requestImage(
-                for: asset,
-                targetSize: .init(width: 200, height: 200),
-                contentMode: .aspectFill,
-                options: nil
-            ) { image, _ in
-                cell.imageView.image = image
-            }
-        }
-        return cell
+        dataSource.apply(snapshot, animatingDifferences: false)
     }
 }
 
 class Cell: UICollectionViewCell {
     var imageView = UIImageView()
+    var imageRequestID: PHImageRequestID?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
