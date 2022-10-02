@@ -7,26 +7,34 @@
 //
 
 import Photos
-import UIKit
+import SwiftUI
 
 class ViewController: UIViewController {
     var layout: UICollectionViewFlowLayout = {
         let layout = UICollectionViewFlowLayout()
         layout.sectionInset = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
-        layout.itemSize = CGSize(width: 100, height: 100)
+        layout.itemSize = CGSize(width: 80, height: 80)
         return layout
     }()
 
     lazy var collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
     var fetchResult: PHFetchResult<PHAsset>?
 
+    let configuration = UICollectionView.CellRegistration { cell, indexPath, itemIdentifier in
+        cell.contentConfiguration = UIHostingConfiguration {
+            Cell(model: itemIdentifier)
+        }
+    }
+    
     override func viewDidLoad() {
         super.viewDidLoad()
 
         view.addSubview(collectionView)
         collectionView.pinEdgesToSuperview()
         collectionView.dataSource = self
-        collectionView.register(Cell.self, forCellWithReuseIdentifier: "Cell")
+//        collectionView.register(Cell.self, forCellWithReuseIdentifier: "Cell")
+        
+        
 
         switch PHPhotoLibrary.authorizationStatus(for: .readWrite) {
         case .limited, .authorized:
@@ -55,38 +63,70 @@ extension ViewController: UICollectionViewDataSource {
     }
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "Cell", for: indexPath) as! Cell
-
+//        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "Cell", for: indexPath) as! Cell
+        let model = CellModel()
+        let cell = collectionView.dequeueConfiguredReusableCell(using: configuration, for: indexPath, item: model)
+//        if let imageRequestID = cell.imageRequestID {
+//            PHImageManager.default().cancelImageRequest(imageRequestID)
+//            cell.imageRequestID = nil
+//        }
+//
         if let fetchResult {
             let asset = fetchResult.object(at: indexPath.item)
-            _ = PHImageManager.default().requestImage(
+            let options = PHImageRequestOptions()
+            options.deliveryMode = .opportunistic
+
+            let imageRequestID = PHImageManager.default().requestImage(
                 for: asset,
-                targetSize: .init(width: 200, height: 200),
+                targetSize: .init(width: cell.bounds.width, height: cell.bounds.height),
                 contentMode: .aspectFill,
-                options: nil
+                options: options
             ) { image, _ in
-                cell.imageView.image = image
+                DispatchQueue.main.async {
+//                    cell.imageView.image = image
+                    model.image = image
+                }
             }
+//            cell.imageRequestID = imageRequestID
         }
         return cell
     }
 }
 
-class Cell: UICollectionViewCell {
-    var imageView = UIImageView()
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-
-        addSubview(imageView)
-        imageView.pinEdgesToSuperview()
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+class CellModel: ObservableObject {
+    @Published var image: UIImage?
+}
+struct Cell: View {
+    @ObservedObject var model: CellModel
+    
+    var body: some View {
+        VStack {
+            if let image = model.image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .clipped()
+            }
+        }
     }
 }
+
+// class Cell: UICollectionViewCell {
+//    var imageView = UIImageView()
+//    var imageRequestID: PHImageRequestID?
+//
+//    override init(frame: CGRect) {
+//        super.init(frame: frame)
+//
+//        addSubview(imageView)
+//        imageView.pinEdgesToSuperview()
+//    }
+//
+//    @available(*, unavailable)
+//    required init?(coder: NSCoder) {
+//        fatalError("init(coder:) has not been implemented")
+//    }
+// }
 
 extension UIView {
     func pinEdgesToSuperview() {
