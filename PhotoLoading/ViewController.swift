@@ -15,16 +15,10 @@ class ViewController: UIViewController {
     var layout: UICollectionViewFlowLayout = {
         let layout = UICollectionViewFlowLayout()
         layout.sectionInset = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
-        layout.itemSize = CGSize(width: 100, height: 100)
-//        layout.itemSize = CGSize(width: 30, height: 30) /// lower lengths = more cells
+//        layout.itemSize = CGSize(width: 100, height: 100)
+        layout.itemSize = CGSize(width: 30, height: 30) /// lower lengths = more cells
         return layout
     }()
-
-    let cellRegistration = UICollectionView.CellRegistration { cell, indexPath, itemIdentifier in
-        cell.contentConfiguration = UIHostingConfiguration {
-            CellView(model: itemIdentifier)
-        }
-    }
 
     lazy var collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
 
@@ -34,6 +28,7 @@ class ViewController: UIViewController {
         view.addSubview(collectionView)
         collectionView.pinEdgesToSuperview()
         collectionView.dataSource = self
+        collectionView.register(Cell.self, forCellWithReuseIdentifier: "Cell")
 
         switch PHPhotoLibrary.authorizationStatus(for: .readWrite) {
         case .limited, .authorized:
@@ -62,46 +57,51 @@ extension ViewController: UICollectionViewDataSource {
     }
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let model = CellViewModel()
-        let cell = collectionView.dequeueConfiguredReusableCell(using: cellRegistration, for: indexPath, item: model)
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "Cell", for: indexPath) as! Cell
 
         if let fetchResult {
             let asset = fetchResult.object(at: indexPath.item)
             let options = PHImageRequestOptions()
             options.deliveryMode = .opportunistic
+            let length = cell.bounds.width * UIScreen.main.scale
 
-            PHImageManager.default().requestImage(
-                for: asset,
-                targetSize: .init(width: cell.bounds.width, height: cell.bounds.height),
-                contentMode: .aspectFill,
-                options: options
-            ) { image, _ in
+            if let imageRequestID = cell.imageRequestID {
+                PHImageManager.default().cancelImageRequest(imageRequestID)
+                cell.imageRequestID = nil
+            }
 
-                model.image = image
+            DispatchQueue.global(qos: .userInitiated).async {
+                let imageRequestID = PHImageManager.default().requestImage(
+                    for: asset,
+                    targetSize: .init(width: length, height: length),
+                    contentMode: .aspectFill,
+                    options: nil
+                ) { image, _ in
+                    DispatchQueue.main.async {
+                        cell.imageView.image = image
+                    }
+                }
+                cell.imageRequestID = imageRequestID
             }
         }
         return cell
     }
 }
 
-class CellViewModel: ObservableObject {
-    @Published var image: UIImage?
-}
+class Cell: UICollectionViewCell {
+    var imageView = UIImageView()
+    var imageRequestID: PHImageRequestID?
 
-struct CellView: View {
-    @ObservedObject var model: CellViewModel
+    override init(frame: CGRect) {
+        super.init(frame: frame)
 
-    var body: some View {
-        VStack {
-            if let image = model.image {
-                Color.clear.overlay {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                }
-                .clipped()
-            }
-        }
+        addSubview(imageView)
+        imageView.pinEdgesToSuperview()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 }
 
