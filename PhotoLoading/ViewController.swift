@@ -9,6 +9,9 @@
 import Photos
 import SwiftUI
 
+/**
+ Demo of lag during scrolling.
+ */
 class ViewController: UIViewController {
     let imageManager = PHCachingImageManager()
     let thumbnailSize = CGSize(width: 30, height: 30)
@@ -61,7 +64,9 @@ class ViewController: UIViewController {
 
     func fetchAssets() {
         fetchResult = PHAsset.fetchAssets(with: nil)
-        collectionView.reloadData()
+        DispatchQueue.main.async {
+            self.collectionView.reloadData()
+        }
     }
 }
 
@@ -82,25 +87,30 @@ extension ViewController: UICollectionViewDataSource {
                 cell.imageRequestID = nil
             }
 
-            let asset = fetchResult.object(at: indexPath.item)
+            DispatchQueue.global(qos: .default).async {
+                let asset = fetchResult.object(at: indexPath.item)
 
-            /// Request the image. This is where the lag happens - if you delete this, scrolling will be smooth again.
-            let imageRequestID = imageManager.requestImage(
-                for: asset,
-                targetSize: thumbnailSize,
-                contentMode: .aspectFill,
-                options: options
-            ) { image, _ in
+                /// Request the image. This is where the lag happens - if you delete this, scrolling will be smooth again.
+                let imageRequestID = self.imageManager.requestImage(
+                    for: asset,
+                    targetSize: self.thumbnailSize,
+                    contentMode: .aspectFill,
+                    options: self.options
+                ) { image, _ in
 
-                cell.imageView.image = image
+                    DispatchQueue.main.async {
+                        cell.imageView.image = image
+                    }
+                }
+
+                cell.imageRequestID = imageRequestID /// Save the ID for canceling if necessary
             }
-            cell.imageRequestID = imageRequestID
         }
         return cell
     }
 }
 
-// MARK: - Delegate and asset caching
+// MARK: - Asset caching
 
 /// from https://developer.apple.com/documentation/photokit/browsing_and_modifying_photo_albums
 extension ViewController: UICollectionViewDelegate {
@@ -108,13 +118,13 @@ extension ViewController: UICollectionViewDelegate {
         updateCachedAssets()
     }
 
-    fileprivate func resetCachedAssets() {
+    func resetCachedAssets() {
         imageManager.stopCachingImagesForAllAssets()
         previousPreheatRect = .zero
     }
 
     /// - Tag: UpdateAssets
-    fileprivate func updateCachedAssets() {
+    func updateCachedAssets() {
         // Update only if the view is visible.
         guard isViewLoaded, view.window != nil else { return }
 
@@ -148,25 +158,41 @@ extension ViewController: UICollectionViewDelegate {
         previousPreheatRect = preheatRect
     }
 
-    fileprivate func differencesBetweenRects(_ old: CGRect, _ new: CGRect) -> (added: [CGRect], removed: [CGRect]) {
+    func differencesBetweenRects(_ old: CGRect, _ new: CGRect) -> (added: [CGRect], removed: [CGRect]) {
         if old.intersects(new) {
             var added = [CGRect]()
             if new.maxY > old.maxY {
-                added += [CGRect(x: new.origin.x, y: old.maxY,
-                                 width: new.width, height: new.maxY - old.maxY)]
+                added += [
+                    CGRect(
+                        x: new.origin.x, y: old.maxY,
+                        width: new.width, height: new.maxY - old.maxY
+                    )
+                ]
             }
             if old.minY > new.minY {
-                added += [CGRect(x: new.origin.x, y: new.minY,
-                                 width: new.width, height: old.minY - new.minY)]
+                added += [
+                    CGRect(
+                        x: new.origin.x, y: new.minY,
+                        width: new.width, height: old.minY - new.minY
+                    )
+                ]
             }
             var removed = [CGRect]()
             if new.maxY < old.maxY {
-                removed += [CGRect(x: new.origin.x, y: new.maxY,
-                                   width: new.width, height: old.maxY - new.maxY)]
+                removed += [
+                    CGRect(
+                        x: new.origin.x, y: new.maxY,
+                        width: new.width, height: old.maxY - new.maxY
+                    )
+                ]
             }
             if old.minY < new.minY {
-                removed += [CGRect(x: new.origin.x, y: old.minY,
-                                   width: new.width, height: new.minY - old.minY)]
+                removed += [
+                    CGRect(
+                        x: new.origin.x, y: old.minY,
+                        width: new.width, height: new.minY - old.minY
+                    )
+                ]
             }
             return (added, removed)
         } else {
@@ -184,6 +210,7 @@ class Cell: UICollectionViewCell {
 
         addSubview(imageView)
         imageView.pinEdgesToSuperview()
+        backgroundColor = .secondarySystemBackground
     }
 
     @available(*, unavailable)
@@ -205,7 +232,7 @@ extension UIView {
     }
 }
 
-private extension UICollectionView {
+extension UICollectionView {
     func indexPathsForElements(in rect: CGRect) -> [IndexPath] {
         let allLayoutAttributes = collectionViewLayout.layoutAttributesForElements(in: rect)!
         return allLayoutAttributes.map { $0.indexPath }
