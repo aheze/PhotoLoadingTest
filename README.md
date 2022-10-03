@@ -10,6 +10,12 @@ Video:
 
 https://user-images.githubusercontent.com/49819455/193663240-098db1b4-bd55-4c8a-ac65-19b666654ba6.mp4
 
+
+Photos seems to be creating lots of threads:
+
+![200+ threads](https://user-images.githubusercontent.com/49819455/193664586-db96054c-e58a-4c5c-8720-cbea97e67f73.png)
+
+
 Deleting the `requestImage` call results in much smooth scrolling.
 
 ```swift
