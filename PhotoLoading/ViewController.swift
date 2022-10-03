@@ -19,6 +19,7 @@ class ViewController: UIViewController {
     var options: PHImageRequestOptions = {
         let options = PHImageRequestOptions()
         options.deliveryMode = .opportunistic
+        options.isSynchronous = false
         return options
     }()
 
@@ -87,7 +88,7 @@ extension ViewController: UICollectionViewDataSource {
                 for: asset,
                 targetSize: thumbnailSize,
                 contentMode: .aspectFill,
-                options: nil
+                options: options
             ) { image, _ in
 
                 cell.imageView.image = image
