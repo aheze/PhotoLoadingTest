@@ -1,4 +1,8 @@
-# PhotoLoadingTest
+# PhotoLoadingTest - Old branch
+
+# Use the code in the [`main`](https://github.com/aheze/PhotoLoadingTest) branch instead.
+
+---
 
 Demo repo of a photo gallery with lag during scroll.
 
